@@ -1,0 +1,14 @@
+Begin4
+Title: glfer
+Version: 0.4.2
+Entered-date: 2010-01-29
+Description: glfer is a GTK+ application designed for transmitting and receiving QRSS/DFCW transmissions, as used by hams mainly on the 137 and 73 kHz band. It shows the spectrum of the soundcard input signal, using one of several selectable spectral estimators and can control a transmitter through the serial or parallel port.
+Keywords: glfer, qrss, dfcw, ham, amateur radio, lf, arma, multitaper, fft, spectrum
+Author: in3otd@qsl.net (Claudio Girardi)
+Maintained-by: in3otd@qsl.net (Claudio Girardi)
+Primary-site: http://www.qsl.net/in3otd/glfer-0.4.2.tar.gz
+Alternate-site:
+Original-site:
+Platforms: Linux
+Copying-policy:	GNU GPL
+End
