@@ -1,0 +1,5 @@
+leak:FcValueSave
+leak:FcValueListCreate
+leak:FcConfigValues
+leak:FcPatternObjectInsertElt
+

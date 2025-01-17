@@ -1,0 +1,14 @@
+/Makefile
+/.deps/
+/config.h
+/config.log
+/config.status
+/stamp-h1
+
+/*.o
+*~
+.*.sw?
+/glfer
+/mixer
+/tags
+/build/

@@ -1,3 +1,7 @@
+2025-01-16 Sami Farin
+    * Released 0.5.0
+    * CMake and libsndfile support
+
 2010-01-29 Claudio Girardi  <in3otd@qsl.net>
 	* Released 0.4.2
 	* Changed TX control port selection dialog to support devices other than ttyS[0-3] and lp[0-1]
