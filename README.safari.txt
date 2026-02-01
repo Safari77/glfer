@@ -1,3 +1,11 @@
+Required libraries on Ubuntu:
+libgtk2.0-0t64 libgtk2.0-dev libsndfile1 libsndfile1-dev fftw2 fftw-dev
+
+On Fedora/Redhat:
+gtk2 gtk2-devel libsndfile libsndfile-devel fftw2 fftw2-devel
+
+NOTE: as GTK2 is legacy, it does not have Wayland support.
+
 ASAN:
 # https://clang.llvm.org/docs/AddressSanitizer.html
 # https://clang.llvm.org/docs/SanitizerSpecialCaseList.html
