@@ -191,13 +191,15 @@ void fft_psd(float *psd_buf, float *phase_buf, fft_params_t *params) {
     }
 }
 
+/* Comparator MUST return -1, 0, 1 for qsort stability and performance. */
 static int cmp_float(const void *num1_p, const void *num2_p) {
-    float *num1, *num2;
+    float n1 = *(float *)num1_p;
+    float n2 = *(float *)num2_p;
 
-    num1 = (float *)num1_p;
-    num2 = (float *)num2_p;
-
-    return (*num1 < *num2);
+    /* Sort descending (larger values first) */
+    if (n1 < n2) return 1;
+    if (n1 > n2) return -1;
+    return 0;
 }
 
 void compute_floor(float *psd_buf, size_t n, float *sig_pwr_p, float *floor_pwr_p, float *peak_pwr_p,
@@ -208,41 +210,7 @@ void compute_floor(float *psd_buf, size_t n, float *sig_pwr_p, float *floor_pwr_
     float *tmp_buf = NULL;
     float sig_pwr = 0.0, floor_pwr = 0.0;
 
-    if ((N2 > (SIZE_MAX / sizeof(float))) || (NULL == (tmp_buf = malloc(N2 * sizeof(float))))) {
-        fprintf(stderr, "compute_floor: error allocating tmp_buf, size %zu\n", N2);
-        exit(EXIT_FAILURE);
-    }
-    /* copy psd_buf to working area */
-    memcpy(tmp_buf, psd_buf, N2 * sizeof(float));
-
-    /* compute total power */
-    for (i = 0; i < N2; i++)
-        sig_pwr += tmp_buf[i];
-    // fprintf(stderr, "sig_pwr : %e\n", sig_pwr);
-
-    /* total mean power in one bin, i.e. mean spectral density */
-    sig_pwr /= N2;
-
-    /* sort the power estimates in each bin in descending order */
-    qsort(tmp_buf, N2, sizeof(float), cmp_float);
-
-    // for (i = 0; i < N2; i++) fprintf(stderr, "%i %e\t", i, tmp_buf[i]);
-    // fprintf(stderr, "psdbuf MAX : %e\n", tmp_buf[0]);
-
-    /* compute noise floor power from the last 5% */
-    for (i = N2 * 0.95; i < N2; i++)
-        floor_pwr += tmp_buf[i];
-    /* total noise power, using estimate from the last 5% */
-    floor_pwr /= 0.05;
-    /* noise mean power in one bin, i.e. spectral density */
-    floor_pwr /= N2;
-
-    //  *sig_pwr_p = sig_pwr;
-    *sig_pwr_p = tmp_buf[0];
-    *floor_pwr_p = floor_pwr;
-
-    /* FIXME: can be done in a lighter way... */
-    /* compute peak data */
+    /* Compute Peak Power and Bin (Linear scan, fast) */
     *peak_pwr_p = 0.0;
     *peak_bin_p = 0;
     for (i = 0; i < N2; i++) {
@@ -250,9 +218,42 @@ void compute_floor(float *psd_buf, size_t n, float *sig_pwr_p, float *floor_pwr_
             *peak_pwr_p = psd_buf[i];
             *peak_bin_p = i;
         }
+        sig_pwr += psd_buf[i]; /* Sum for mean calculation */
     }
 
-    free(tmp_buf);
+    /* total mean power in one bin, i.e. mean spectral density */
+    *sig_pwr_p = sig_pwr / N2;
+
+    /* Sorting is O(N log N) and very expensive on file reads.
+       Only do it if autoscale is enabled. If disabled, floor_pwr is not strictly
+       required for display leveling (fixed levels used), so we use mean power as a fallback. */
+    if (opt.autoscale) {
+        if ((N2 > (SIZE_MAX / sizeof(float))) || (NULL == (tmp_buf = malloc(N2 * sizeof(float))))) {
+            fprintf(stderr, "compute_floor: error allocating tmp_buf, size %zu\n", N2);
+            exit(EXIT_FAILURE);
+        }
+        /* copy psd_buf to working area */
+        memcpy(tmp_buf, psd_buf, N2 * sizeof(float));
+
+        /* sort the power estimates in each bin in descending order */
+        qsort(tmp_buf, N2, sizeof(float), cmp_float);
+
+        /* compute noise floor power from the last 5% */
+        for (i = N2 * 0.95; i < N2; i++)
+            floor_pwr += tmp_buf[i];
+
+        /* total noise power, using estimate from the last 5% */
+        floor_pwr /= 0.05;
+        /* noise mean power in one bin, i.e. spectral density */
+        floor_pwr /= N2;
+
+        *floor_pwr_p = floor_pwr;
+        free(tmp_buf);
+    } else {
+        /* Fallback when autoscale is off: just use mean power as floor
+           to avoid 0.0 in display stats */
+        *floor_pwr_p = *sig_pwr_p;
+    }
 }
 
 void fft_close(fft_params_t *params) {
