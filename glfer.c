@@ -252,7 +252,7 @@ int main(int argc, char *argv[]) {
     opt.scale_type = SCALE_LOG;
     opt.ctrl_device = malloc(6 * sizeof(char));
     strcpy(opt.ctrl_device, "ttyS1");
-    opt.audio_device = malloc(1 * sizeof(char));
+    opt.audio_device = calloc(SND_DEV_MAX_LEN * sizeof(char), 1);
     strcpy(opt.audio_device, "");
     opt.window_type = 7;
     opt.thr_level = 0.0;

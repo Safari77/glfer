@@ -215,7 +215,7 @@ static int rc_file_parse(const char *filename) {
                 /* Get the ending position.  */
                 for (iend = i; *iend && *iend != '\n'; iend++)
                     ;
-                opt.audio_device = (char *)malloc(iend - i + 1);
+                opt.audio_device = calloc(SND_DEV_MAX_LEN, sizeof(char));
                 memcpy(opt.audio_device, i, iend - i);
                 opt.audio_device[iend - i] = '\0';
             }

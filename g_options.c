@@ -179,8 +179,7 @@ static void compound_entry(gchar *title, GtkWidget **entry, GtkWidget *vbox) {
 
     hbox = gtk_hbox_new(FALSE, 0);
     *entry = gtk_entry_new();
-    // gtk_widget_set_usize(*entry, 75, -1);
-    gtk_box_pack_end(GTK_BOX(hbox), *entry, FALSE, FALSE, 0);
+    gtk_box_pack_end(GTK_BOX(hbox), *entry, TRUE, TRUE, 0);
     label = gtk_label_new(title);
     gtk_box_pack_end(GTK_BOX(hbox), label, FALSE, FALSE, 5);
     gtk_box_pack_start(GTK_BOX(vbox), hbox, FALSE, FALSE, 0);
@@ -1447,8 +1446,11 @@ static void audio_widgets_to_prefs(GtkWidget *widget, gpointer data) {
     gchar *tmp_str;
 
     tmp_str = gtk_editable_get_chars(GTK_EDITABLE(audio_device_en), 0, -1);
-    strncpy(opt.audio_device, tmp_str, 9);
-    g_free(tmp_str);
+    if (tmp_str) {
+        memset(opt.audio_device, 0, SND_DEV_MAX_LEN);
+        strncpy(opt.audio_device, tmp_str, SND_DEV_MAX_LEN - 1);
+        g_free(tmp_str);
+    }
     close_audio();    /* close current audio device */
     init_audio(NULL); /* open new audio device */
 }
@@ -1485,6 +1487,9 @@ void audio_settings_dialog(GtkWidget *widget, gpointer data) {
     gtk_widget_show(tmp_hb);
 
     compound_entry("Path :", &audio_device_en, tmp_hb);
+    gtk_box_set_child_packing(GTK_BOX(tmp_hb), audio_device_en, TRUE, TRUE, 0, GTK_PACK_END);
+    gtk_widget_set_size_request(audio_device_en, 450, -1);
+    gtk_window_set_resizable(GTK_WINDOW(audio_window), TRUE);
     gtk_tooltips_set_tip(glfer.tt, audio_device_en, "Audio device like alsa_input.pci-0000_00_1f.3.analog-stereo", NULL);
 
     /* OK button */
