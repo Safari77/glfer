@@ -1038,7 +1038,7 @@ void main_window_draw(float *psdbuf) {
     GdkRectangle update_rect;
     int i, j, i_off;
     static int x = 0;
-    int sx_old = 0, sx;
+    int sx;
     float f, f_i, f_off;
     float tmpf = 0.0;
     static float display_max_lvl = 0, display_min_lvl = 0;
@@ -1049,6 +1049,10 @@ void main_window_draw(float *psdbuf) {
     int peakbin;
     float binsize;
     int max0;  // maximum to 0dB indicator
+
+    /* Optimization: Batch draw points to reduce X11/XWayland overhead */
+    GdkPoint *points = (GdkPoint *)calloc(n, sizeof(GdkPoint));
+    if (!points) return; /* Should handle memory error better but safe fallback */
 
     if (x >= l)
         x = 0;
@@ -1203,16 +1207,15 @@ void main_window_draw(float *psdbuf) {
             rgbbuf[3 * (n_zoom * i + j) + 2] = colortab[3 * v + 2];
         }
 
-        if (i == 0) {
-            sx_old = SPEC_DA_WIDTH * f / 255.0;
-        } else {
-            sx = SPEC_DA_WIDTH * f / 255.0;
-
-            /* draw spectrum amplitude pixmap */
-            gdk_draw_line(spec_pixmap, spec_da->style->white_gc, sx_old, i - 1, sx, i);
-            sx_old = sx;
-        }
+        /* Calculate and store point for polyline drawing */
+        sx = SPEC_DA_WIDTH * f / 255.0;
+        points[i].x = sx;
+        points[i].y = i;
     }
+
+    /* Draw all lines in one go */
+    gdk_draw_lines(spec_pixmap, spec_da->style->white_gc, points, n);
+    free(points);
 
     /* draw threshold level line in current spectrum window */
     gdk_draw_line(spec_pixmap, spec_da->style->white_gc, SPEC_DA_WIDTH * thr_level, 0, SPEC_DA_WIDTH * thr_level,
