@@ -1,3 +1,5 @@
+To see valid devices for -d parameter, try "pactl list short sources".
+
 Required libraries on Ubuntu:
 libgtk2.0-0t64 libgtk2.0-dev libsndfile1 libsndfile1-dev fftw2 fftw-dev
 

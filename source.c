@@ -213,12 +213,17 @@ static gboolean audio_available_idle_wrapper(gpointer data) {
     return TRUE; /* Return TRUE to ensure the function is called again */
 }
 
+static gboolean audio_available_soundcard_wrapper(gpointer data) {
+    /* Condition 0 is fine since the refactored audio_read ignores it */
+    audio_available(NULL, 0, 0);
+    return TRUE;
+}
+
 void start_reading_audio() {
     size_t n_eff = opt.data_block_size * (1.0 - opt.data_blocks_overlap);
 
     if (glfer.input_source == SOUNDCARD_SOURCE) { /* read from soundcard */
-        /* audio_available() has to be called whenever there's data on audio_fd */
-        input_tag = gdk_input_add(audio_fd, GDK_INPUT_READ, audio_available, NULL);
+        input_tag = g_idle_add(audio_available_soundcard_wrapper, NULL);
     } else if (glfer.input_source == FILE_SOURCE) { /* read from file */
         if (file_ended == 1) {
             open_sndfile(fname, n_eff, &opt.sample_rate);
@@ -232,7 +237,7 @@ void start_reading_audio() {
 void stop_reading_audio() {
     if (input_tag != -1) {
         /* if currently reading from a source */
-        gtk_input_remove(input_tag);
+        g_source_remove(input_tag);
         input_tag = -1;
         stop_start_button_set_label("Start");
         /* do not close an open file, so that pressing again the Start/Stop button continues the file processing */

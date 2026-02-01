@@ -1,6 +1,7 @@
 /* audio.c
  *
  * Copyright (C) 2001-2007 Claudio Girardi
+ * Refactored for PipeWire/PulseAudio by Sami Farin (C) 2026
  *
  * This file is derived from xspectrum, Copyright (C) 2000 Vincent Arkesteijn
  *
@@ -22,318 +23,106 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/soundcard.h>
 #include <errno.h>
+#include <pulse/simple.h>
+#include <pulse/error.h>
 #include "audio.h"
 #include "util.h"
 
-#ifndef AFMT_S16_NE
-#  include <endian.h>
-#  if (__BYTE_ORDER == __LITTLE_ENDIAN)
-#    define AFMT_S16_NE AFMT_S16_LE
-#  else
-#    define AFMT_S16_NE AFMT_S16_BE
-#  endif
-#endif
+/* Default to NULL so PipeWire uses the system default source if not specified */
+#define DEFAULT_DEV_NAME    NULL
+#define DEFAULT_SAMPLE_RATE 48000
 
-#include "audio.h"
-
-#define DEFAULT_DEV_NAME    "/dev/dsp"
-#define DEFAULT_SAMPLE_RATE 44000
-
-static int audio_fd;
-
-static int sample_resolution; /* # of bits / sample */
-static int sample_offset;
-
-static int bufsize;
-static int out_len; /* number of samples to acquire */
-
-static unsigned char *buf = NULL, *buf8 = NULL;
-static short int *buf16 = NULL;
+static pa_simple *s_handle = NULL;
+static int out_len;
 static float *buff_f = NULL;
 static int old_p = 0, old_len = 0;
+static int current_sample_rate;
 
-/* initialises the audio interface */
 int audio_init(char *device, int *sample_rate, int len) {
-    int format, stereo, version, n;
-
     out_len = len;
 
-    if (!device)
-        device = DEFAULT_DEV_NAME;
-    if ((audio_fd = open(device, O_RDONLY | O_NONBLOCK)) == -1) {
-        perror(device);
-        return (-1);
-    }
-    format = AFMT_S16_NE;
-    /*  format = AFMT_U8; */
-    if (ioctl(audio_fd, SNDCTL_DSP_SETFMT, &format) == -1) {
-        perror("SNDCTL_DSP_SETFMT");
-        return (-1);
-    }
-    switch (format) {
-    case (AFMT_U8):
-        sample_resolution = 8;
-        sample_offset = 128;
-        break;
-    case (AFMT_S16_NE):
-        sample_resolution = 16;
-        sample_offset = 0;
-        break;
-    default:
-        format = AFMT_U8;
-        if (ioctl(audio_fd, SNDCTL_DSP_SETFMT, &format) == -1) {
-            perror("SNDCTL_DSP_SETFMT");
-            return (-1);
-        }
-        if (format != AFMT_U8) {
-            fprintf(stderr, "Sorry, 8-bit linear audio not supported.\n");
-            return (-1);
-        }
-        sample_resolution = 8;
-        sample_offset = 128;
+    // If device is an empty string, set it to NULL for PulseAudio default
+    if (device && strlen(device) == 0) {
+        device = NULL;
     }
 
-    len *= sample_resolution / 8;
-
-    /* OSS User's Guide says there is no need to set explicitely the fragment size... */
-    n = 0x7fff0001;
-    while (len > 2) {
-        n++;
-        len /= 2;
-    }
-    if (n < 0x7fff0004) /* minimum allowed value */
-        n = 0x7fff0004;
-    /* first 16 bits are the max. number of fragments; 0x7fff means no limit */
-    /* last 16 bits are the log2 of the fragment size */
-    if (ioctl(audio_fd, SNDCTL_DSP_SETFRAGMENT, &n) == -1) {
-        perror("SNDCTL_DSP_SETFRAGMENT");
-        return (-1);
-    }
-
-    stereo = 0;
-    if (ioctl(audio_fd, SNDCTL_DSP_STEREO, &stereo) == -1) {
-        perror("SNDCTL_DSP_STEREO");
-        return (-1);
-    }
-    if (stereo != 0) {
-        fprintf(stderr, "Sorry, mono audio not supported.\n");
-    }
     if (!*sample_rate)
         *sample_rate = DEFAULT_SAMPLE_RATE;
-    n = *sample_rate;
-    if (ioctl(audio_fd, SNDCTL_DSP_SPEED, &n) == -1) {
-        perror("SNDCTL_DSP_SPEED");
-        return (-1);
-    }
-    if (n != *sample_rate)
-        fprintf(stderr, "warning: sample rate changed (%i -> %i)\n", *sample_rate, n);
-    *sample_rate = n;
+    current_sample_rate = *sample_rate;
 
-    if (ioctl(audio_fd, SNDCTL_DSP_GETBLKSIZE, &bufsize) == -1) {
-        perror("SNDCTL_DSP_GETBLKSIZE");
-        return (-1);
-    }
-    D(printf("bufsize = %i\n", bufsize)); /* for debug */
+    /* Define the stream format: 16-bit Mono */
+    static const pa_sample_spec ss = {
+        .format = PA_SAMPLE_S16NE,
+        .rate = 48000,
+        .channels = 1
+    };
 
-    /* Read something (one full fragment), to start recording. This shouldn't
-     * be necessary but due to a bug in old versions of OSS, it is. */
-#ifdef OSS_GETVERSION
-    if (ioctl(audio_fd, OSS_GETVERSION, &version) == -1) {
-        if (errno == EINVAL) { /* this ioctl was introduced in version 3.6.0 */
-            version = 0;
-        } else {
-            perror("OSS_GETVERSION");
-            return (-1);
-        }
-    }
-    if (version < 360)
-#endif
-    {
-        unsigned char *dummy;
+    pa_sample_spec custom_ss = ss;
+    custom_ss.rate = *sample_rate;
 
-        dummy = malloc(bufsize);
-        if (read(audio_fd, dummy, bufsize) < bufsize)
-            perror("audio read");
-        FREE_MAYBE(dummy);
-    }
-    buf = NULL;
-    old_p = 0, old_len = 0;
+    int error;
+    /* device here can be the PipeWire/Pulse source name, or NULL for default */
+    s_handle = pa_simple_new(NULL,               // Use default server
+                             "glfer",            // Application name
+                             PA_STREAM_RECORD,
+                             device,             // Device name (e.g. NULL or pulse source string)
+                             "Spectrum Analysis",// Stream description
+                             &custom_ss,         // Sample format
+                             NULL,               // Use default channel map
+                             NULL,               // Use default buffering attributes
+                             &error);
 
-    return audio_fd;
+    if (!s_handle) {
+        fprintf(stderr, "pa_simple_new() failed: %s\n", pa_strerror(error));
+        return -1;
+    }
+
+    /* Reset buffers */
+    old_p = 0;
+    old_len = 0;
+
+    return 1; // Return a dummy positive FD
 }
 
-/* reads the audio data */
 void audio_read(float **buf_out, size_t *n_out) {
-    int i, s_bufsize, res, n_read;
-    short sample;
+    int error;
+    /* We read in blocks of out_len to satisfy the app's buffer logic */
+    short int buf16[out_len];
 
-    /* size of the buffer of char (8 bits) */
-    s_bufsize = bufsize * 8 / sample_resolution;
-    /* when using 16 bit samples the sample buffer will have */
-    /* twice the size of the buffer used for the 8 bit case, */
-    /* since we want to be able to store the same number of samples */
-
-    if (!buf) {
-        switch (sample_resolution) {
-        case (8):
-            buf = buf8 = (unsigned char *)calloc(s_bufsize, sizeof(unsigned char));
-            break;
-        case (16):
-            buf16 = calloc(s_bufsize, sizeof(short int));
-            buf = (unsigned char *)buf16;
-            break;
-        }
-        buff_f = (float *)calloc(s_bufsize + out_len, sizeof(float));
-        if (!buff_f) {
-            fprintf(stderr, "error allocating buff_f (size %i)\n", s_bufsize + out_len);
-            exit(-1);
-        }
+    if (!buff_f) {
+        buff_f = (float *)calloc(out_len * 2, sizeof(float));
     }
 
-    i = 0;
-    while (i < s_bufsize) {
-        /* read 1 or 2 bytes, depending on the desired sample resolution */
-        res = read(audio_fd, &sample, sample_resolution / 8);
-
-        if (res > 0) {
-            /* We successfully read a sample */
-             if (res != sample_resolution / 8) {
-                /* Partial read shouldn't happen for 1-2 bytes, but good to handle */
-                continue;
-            }
-
-            /* fill the buffer */
-            switch (sample_resolution) {
-            case (8):
-                buf8[i++] = (unsigned char)sample;
-                break;
-            case (16):
-                buf16[i++] = (short int)sample;
-                break;
-            }
-        } else if (res == 0) {
-            /* EOF - no samples available */
-            break;
-        } else {
-            /* Error in reading */
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                /* No more data available right now, return what we have */
-                break;
-            }
-            if (errno == EINTR) {
-                /* Interrupted system call, try again */
-                continue;
-            }
-
-            /* Fatal error */
-            perror("Audio read failed");
-            exit(1);
-        }
-    }
-    n_read = i; /* number of acquired samples */
-
-    /* move the old data to the beginning */
-    for (i = 0; i < old_len; i++)
+    /* Move old data */
+    for (int i = 0; i < old_len; i++)
         buff_f[i] = buff_f[old_p + i];
     old_p = 0;
 
-    /* copy the sound driver buffer into the application buffer */
-    switch (sample_resolution) {
-    case (8):
-        for (i = 0; i < n_read; i++)
-            /* buf8 is an array of char */
-            buff_f[i + old_len] = ((float)buf8[i] - sample_offset) / 128.0f;
-        break;
-    case (16):
-        for (i = 0; i < n_read; i++) {
-            /* buf16[] is an array of short int */
-            buff_f[i + old_len] = ((float)buf16[i] - sample_offset) / 32768.0f;
-        }
-        break;
-    }
-
-    *buf_out = buff_f;
-    *n_out = (old_len + n_read) / out_len;
-    old_p = (*n_out) * out_len;
-    old_len = (old_len + n_read) % out_len;
-}
-
-/* reads the audio data */
-void audio_read_old(float **buf_out, int *n_out) {
-    int i, s_bufsize;
-    audio_buf_info info;
-
-    s_bufsize = bufsize * 8 / sample_resolution;
-
-    if (!buf) {
-        switch (sample_resolution) {
-        case (8):
-            buf = buf8 = (unsigned char *)calloc(s_bufsize, sizeof(unsigned char));
-            break;
-        case (16):
-            buf16 = (short int *)calloc(s_bufsize, sizeof(short int));
-            buf = (unsigned char *)buf16;
-            break;
-        }
-        buff_f = (float *)calloc(s_bufsize + out_len, sizeof(float));
-        if (!buff_f) {
-            fprintf(stderr, "error allocating buff_f (size %i)\n", s_bufsize + out_len);
-            exit(-1);
-        }
-    }
-    for (i = 0; i < old_len; i++)
-        buff_f[i] = buff_f[old_p + i];
-    old_p = 0;
-
-    if (ioctl(audio_fd, SNDCTL_DSP_GETISPACE, &info) == -1) {
-        perror("SNDCTL_DSP_GETISPACE");
-        exit(-1);
-    }
-
-    if (info.bytes < bufsize) {
-        fprintf(stderr, "Not enough data for audio read (%i<%i).\n", info.bytes, bufsize);
-        *n_out = 0;
+    /* Read from PipeWire */
+    if (pa_simple_read(s_handle, buf16, sizeof(buf16), &error) < 0) {
+        fprintf(stderr, "pa_simple_read() failed: %s\n", pa_strerror(error));
         return;
     }
 
-    /* read a full sound driver buffer (as recommended by the OSS) */
-    if (read(audio_fd, buf, bufsize) < bufsize) {
-        perror("audio read");
-        return;
-    }
-    /* copy the sound driver buffer into the application buffer */
-    switch (sample_resolution) {
-    case (8):
-        for (i = 0; i < bufsize; i++)
-            /* buf8 is an array of char */
-            buff_f[i + old_len] = ((float)buf8[i] - sample_offset) / 128;
-        break;
-    case (16):
-        for (i = 0; i < bufsize / 2; i++) {
-            /* buf16[] is an array of short int */
-            buff_f[i + old_len] = ((float)buf16[i] - sample_offset) / 32768;
-        }
-        break;
+    /* Convert 16-bit PCM to Float */
+    for (int i = 0; i < out_len; i++) {
+        buff_f[i + old_len] = (float)buf16[i] / 32768.0f;
     }
 
+    int total_samples = out_len + old_len;
     *buf_out = buff_f;
-    *n_out = (old_len + s_bufsize) / out_len;
+    *n_out = total_samples / out_len;
+
     old_p = (*n_out) * out_len;
-    old_len = (old_len + s_bufsize) % out_len;
+    old_len = total_samples % out_len;
 }
 
 void audio_close(void) {
-    D(printf("buf16 = %p\n", buf16)); /* for debug */
-
-    close(audio_fd);
-    FREE_MAYBE(buf8);
-    FREE_MAYBE(buf16);
-    buf = NULL;
-    /* since buf is the same as buf8 or buf16 it should not be freed */
+    if (s_handle) {
+        pa_simple_free(s_handle);
+        s_handle = NULL;
+    }
     FREE_MAYBE(buff_f);
 }

@@ -1485,7 +1485,7 @@ void audio_settings_dialog(GtkWidget *widget, gpointer data) {
     gtk_widget_show(tmp_hb);
 
     compound_entry("Path :", &audio_device_en, tmp_hb);
-    gtk_tooltips_set_tip(glfer.tt, audio_device_en, "Audio device path like /dev/dsp or /dev/dsp1", NULL);
+    gtk_tooltips_set_tip(glfer.tt, audio_device_en, "Audio device like alsa_input.pci-0000_00_1f.3.analog-stereo", NULL);
 
     /* OK button */
     temp_bu = gtk_button_new_with_label("Ok");

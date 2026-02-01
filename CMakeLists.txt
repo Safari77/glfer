@@ -23,6 +23,12 @@ include_directories(${SNDFILE_INCLUDE_DIRS})
 link_directories(${SNDFILE_LIBRARY_DIRS})
 add_definitions(${SNDFILE_CFLAGS_OTHER})
 
+# PulseAudio (for PipeWire compatibility)
+pkg_check_modules(PULSE REQUIRED libpulse-simple)
+include_directories(${PULSE_INCLUDE_DIRS})
+link_directories(${PULSE_LIBRARY_DIRS})
+add_definitions(${PULSE_CFLAGS_OTHER})
+
 # FFTW2
 find_path(FFTW2_INCLUDE_DIR fftw.h)
 find_library(FFTW2_LIBRARY fftw)
@@ -81,7 +87,7 @@ set(GLFER_SOURCES
 
 # Add glfer executable
 add_executable(glfer ${GLFER_SOURCES})
-target_link_libraries(glfer -lm PkgConfig::deps ${GTK2_LIBRARIES} ${SNDFILE_LIBRARIES} ${RFFTW2_LIBRARY} ${FFTW2_LIBRARY})
+target_link_libraries(glfer -lm PkgConfig::deps ${GTK2_LIBRARIES} ${PULSE_LIBRARIES} ${SNDFILE_LIBRARIES} ${RFFTW2_LIBRARY} ${FFTW2_LIBRARY})
 
 # Add mixer executable
 add_executable(mixer mixer.c)

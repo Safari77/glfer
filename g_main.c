@@ -124,7 +124,7 @@ static GtkItemFactoryEntry menu_items[] = {
     {         "/QSO/Message",         NULL,     (GtkItemFactoryCallback)create_txmsg_window,      0,           NULL},
     /* {"/Jason", NULL, jason_mode, 0, NULL}, */
     {                "/Save",         NULL,                                        NULL,           0,     "<Branch>"},
-    {"/Save/Full Spectrgram",         NULL,        (GtkItemFactoryCallback)save_full_pixmap,      0,           NULL},
+    {"/Save/Full Spectrogram",        NULL,        (GtkItemFactoryCallback)save_full_pixmap,      0,           NULL},
     {  "/Save/Select region",         NULL,      (GtkItemFactoryCallback)save_pixmap_region,      0,           NULL},
     {                "/Test",         NULL,          (GtkItemFactoryCallback)tx_test_dialog,      0,           NULL},
     {               "/Scope",         NULL,       (GtkItemFactoryCallback)scope_window_init,      0,           NULL},

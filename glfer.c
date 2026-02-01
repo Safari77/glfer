@@ -139,7 +139,7 @@ static void help(char *name) {
             "Usage: %s [options]\n"
             "Options:\n"
             "\n"
-            "  -d, --device FILE       use FILE as audio input device instead of /dev/dsp.\n"
+            "  -d, --device DEV        use DEV as pipewire device instead of default\n"
             "  -f, --file FILENAME     take audio input from FILENAME (WAV format).\n"
             "  -s, --sample_rate RATE  set audio sample rate to RATE [Hz].\n"
             "  -n N                    set number of points fot the FFT to N.\n"
@@ -252,8 +252,8 @@ int main(int argc, char *argv[]) {
     opt.scale_type = SCALE_LOG;
     opt.ctrl_device = malloc(6 * sizeof(char));
     strcpy(opt.ctrl_device, "ttyS1");
-    opt.audio_device = malloc(9 * sizeof(char));
-    strcpy(opt.audio_device, "/dev/dsp");
+    opt.audio_device = malloc(1 * sizeof(char));
+    strcpy(opt.audio_device, "");
     opt.window_type = 7;
     opt.thr_level = 0.0;
     opt.autoscale = 1; /* autoscale as default, otherwise may be confusing for a new user */
