@@ -1,10 +1,10 @@
 To see valid devices for -d parameter, try "pactl list short sources".
 
 Required libraries on Ubuntu:
-libgtk2.0-0t64 libgtk2.0-dev libsndfile1 libsndfile1-dev fftw2 fftw-dev
+libgtk2.0-0t64 libgtk2.0-dev libsndfile1 libsndfile1-dev fftw2 fftw-dev libpulse-dev libpulse0
 
 On Fedora/Redhat:
-gtk2 gtk2-devel libsndfile libsndfile-devel fftw2 fftw2-devel
+gtk2 gtk2-devel libsndfile libsndfile-devel fftw2 fftw2-devel pulseaudio-libs pulseaudio-libs-devel
 
 NOTE: as GTK2 is legacy, it does not have Wayland support.
 
