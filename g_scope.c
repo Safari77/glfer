@@ -137,7 +137,7 @@ void scope_window_init(GtkWidget *widget, gpointer data) {
         for (i = 0; i < 2; i++) {
             entry.path = input_sources[i].name;
             entry.accelerator = NULL;
-            entry.callback = input_source_sel_changed;
+            entry.callback = (GtkItemFactoryCallback)input_source_sel_changed;
             entry.callback_action = input_sources[i].type;
             ;
             entry.item_type = NULL;

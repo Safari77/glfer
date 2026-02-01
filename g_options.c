@@ -565,7 +565,7 @@ void spec_settings_dialog(GtkWidget *widget, gpointer data) {
     for (i = 0; i < num_fft_windows; i++) {
         entry.path = fft_windows[i].name;
         entry.accelerator = NULL;
-        entry.callback = fft_windows_sel_changed;
+        entry.callback = (GtkItemFactoryCallback)fft_windows_sel_changed;
         entry.callback_action = fft_windows[i].type;
         ;
         entry.item_type = NULL;
@@ -725,7 +725,7 @@ void spec_settings_dialog(GtkWidget *widget, gpointer data) {
     for (i = 0; i < num_palettes; i++) {
         entry.path = palettes[i].name;
         entry.accelerator = NULL;
-        entry.callback = palette_sel_changed;
+        entry.callback = (GtkItemFactoryCallback)palette_sel_changed;
         entry.callback_action = palettes[i].type;
         entry.item_type = NULL;
         gtk_item_factory_create_item(item_factory, &entry, NULL, 1);
