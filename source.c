@@ -207,6 +207,12 @@ void toggle_stop_start(GtkWidget *widget, gpointer data) {
     }
 }
 
+static gboolean audio_available_idle_wrapper(gpointer data) {
+    /* Call the original function with dummy arguments for source/condition */
+    audio_available(data, 0, 0);
+    return TRUE; /* Return TRUE to ensure the function is called again */
+}
+
 void start_reading_audio() {
     size_t n_eff = opt.data_block_size * (1.0 - opt.data_blocks_overlap);
 
@@ -218,7 +224,7 @@ void start_reading_audio() {
             open_sndfile(fname, n_eff, &opt.sample_rate);
             file_ended = 0;
         }
-        input_tag = g_idle_add((GSourceFunc)audio_available, NULL);
+        input_tag = g_idle_add(audio_available_idle_wrapper, NULL);
     }
     stop_start_button_set_label("Stop");
 }
