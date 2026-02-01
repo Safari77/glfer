@@ -36,16 +36,16 @@ int speed, bits, stereo; /* Audio parameters */
 static float *floatbuff = NULL;
 static size_t out_len = 1024;  // FIXME
 
-SNDFILE *sndfile;  // Handle to the open audio file
+SNDFILE *sndfile = NULL;  // Handle to the open audio file
 SF_INFO sfinfo;    // Holds audio metadata (channels, samplerate, etc.)
 
 int open_sndfile(char *fname, size_t n, int *speed) {
     // Sets size of data block to be read
     out_len = n;
-    fprintf(stderr, "open_sndfile %s n=%u  speed=%u\n", fname, n, *speed);
+    fprintf(stderr, "open_sndfile %s n=%zu  speed=%d\n", fname, n, *speed);
 
     if (sndfile) {
-        fprintf(stderr, "Closing sndfile %p\n", sndfile);
+        fprintf(stderr, "Closing sndfile %p\n", (void*)sndfile);
         sf_close(sndfile);
         sndfile = NULL;
     }
@@ -75,8 +75,8 @@ int open_sndfile(char *fname, size_t n, int *speed) {
         bits = 0;  // Not a fixed-width PCM format
     }
 
-    fprintf(stderr, "Audio format: %d channels, %d Hz, %d-bit PCM or float ...\n", sfinfo.channels, sfinfo.samplerate,
-            bits);
+    fprintf(stderr, "Audio format: %d channels, %d Hz, %d-bit PCM or float ...\n",
+            sfinfo.channels, sfinfo.samplerate, bits);
 
     return 0;  // Success
 }
@@ -84,29 +84,34 @@ int open_sndfile(char *fname, size_t n, int *speed) {
 /* reads the audio data */
 void sndfile_read(float **buf_out, size_t *n_out) {
     if (!floatbuff) {
-        if (out_len > (SIZE_MAX / sizeof(float) / sfinfo.channels)) {
+        /* Safety check for integer overflow */
+        if (sfinfo.channels > 0 && out_len > (SIZE_MAX / sizeof(float) / sfinfo.channels)) {
             fprintf(stderr, "Integer overflow avoided in sndfile_read calloc\n");
             exit(EXIT_FAILURE);
         }
         floatbuff = (float *)calloc(out_len * sfinfo.channels, sizeof(float));
         if (!floatbuff) {
             fprintf(stderr, "Memory allocation failed\n");
-            sf_close(sndfile);
+            if (sndfile) sf_close(sndfile);
             exit(EXIT_FAILURE);
         }
     }
+
     // Read audio samples (returns frames, not samples)
-    size_t frames_read = sf_readf_float(sndfile, floatbuff, out_len);
+    sf_count_t frames_read = 0;
+    if (sndfile) {
+        frames_read = sf_readf_float(sndfile, floatbuff, out_len);
+    }
+
     //*n_out = frames_read * sfinfo.channels; // Total number of samples
     *n_out = frames_read ? 1 : 0;
     *buf_out = floatbuff;
-
-    if (frames_read == 0) {
-        fprintf(stderr, "End of file or read error\n");
-    }
 }
 
 void close_sndfile() {
-    sf_close(sndfile);
+    if (sndfile) {
+        sf_close(sndfile);
+        sndfile = NULL;
+    }
     FREE_MAYBE(floatbuff);
 }
