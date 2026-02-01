@@ -196,41 +196,46 @@ void audio_read(float **buf_out, size_t *n_out) {
     }
 
     i = 0;
-    for (;;) {
+    while (i < s_bufsize) {
         /* read 1 or 2 bytes, depending on the desired sample resolution */
         res = read(audio_fd, &sample, sample_resolution / 8);
-        if (res == 0) { /* no samples available */
-            break;
-        } else if (res != sample_resolution / 8) {                         /* error in reading */
-            D(fprintf(stderr, "%d %d %s\n", res, errno, strerror(errno))); /* for debug */
 
-            if (errno == EINTR)
-                break; /* interrupted */           // continue;
-            if (errno == EAGAIN || errno == EBUSY) /* no data was immediately available */
+        if (res > 0) {
+            /* We successfully read a sample */
+             if (res != sample_resolution / 8) {
+                /* Partial read shouldn't happen for 1-2 bytes, but good to handle */
+                continue;
+            }
+
+            /* fill the buffer */
+            switch (sample_resolution) {
+            case (8):
+                buf8[i++] = (unsigned char)sample;
                 break;
-            /* otherwise... */
+            case (16):
+                buf16[i++] = (short int)sample;
+                break;
+            }
+        } else if (res == 0) {
+            /* EOF - no samples available */
+            break;
+        } else {
+            /* Error in reading */
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                /* No more data available right now, return what we have */
+                break;
+            }
+            if (errno == EINTR) {
+                /* Interrupted system call, try again */
+                continue;
+            }
+
+            /* Fatal error */
             perror("Audio read failed");
             exit(1);
         }
-        /* fill the buffer */
-        switch (sample_resolution) {
-        case (8):
-            buf8[i++] = (unsigned char)sample;
-            break;
-        case (16):
-            buf16[i++] = (short int)sample;
-            break;
-        }
-
-        if (i >= s_bufsize)
-            /* should not happen, but... */
-            fprintf(stderr, "Error !\n");
-        break;
     }
     n_read = i; /* number of acquired samples */
-
-    /* fprintf(stderr, "n_read = %i, old_len = %i, old_p = %i n_read+old_len = %i %i\n", n_read, old_len, old_p, n_read
-     * + old_len, s_bufsize+out_len); */
 
     /* move the old data to the beginning */
     for (i = 0; i < old_len; i++)
@@ -242,12 +247,12 @@ void audio_read(float **buf_out, size_t *n_out) {
     case (8):
         for (i = 0; i < n_read; i++)
             /* buf8 is an array of char */
-            buff_f[i + old_len] = ((float)buf8[i] - sample_offset) / 128;
+            buff_f[i + old_len] = ((float)buf8[i] - sample_offset) / 128.0f;
         break;
     case (16):
         for (i = 0; i < n_read; i++) {
             /* buf16[] is an array of short int */
-            buff_f[i + old_len] = ((float)buf16[i] - sample_offset) / 32768;
+            buff_f[i + old_len] = ((float)buf16[i] - sample_offset) / 32768.0f;
         }
         break;
     }
@@ -256,8 +261,6 @@ void audio_read(float **buf_out, size_t *n_out) {
     *n_out = (old_len + n_read) / out_len;
     old_p = (*n_out) * out_len;
     old_len = (old_len + n_read) % out_len;
-
-    /* return 1; */
 }
 
 /* reads the audio data */
