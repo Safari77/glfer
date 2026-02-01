@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(glfer VERSION 0.5.0)
+project(glfer VERSION 0.5.1)
 set(PACKAGE_NAME "glfer")
 set(PACKAGE_VERSION ${VERSION})
 add_definitions(-DPACKAGE_NAME="${PACKAGE_NAME}")

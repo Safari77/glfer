@@ -1,3 +1,7 @@
+2026-02-01 Sami Farin
+    * Released 0.5.1
+    * pipewire support, GCC 14 compat fixes, double-free fixes etc
+
 2025-01-16 Sami Farin
     * Released 0.5.0
     * CMake and libsndfile support
